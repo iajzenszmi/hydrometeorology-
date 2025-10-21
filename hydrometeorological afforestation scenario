@@ -1,0 +1,115 @@
+~ $ flang hydro3.f -ffree-form~ $ ./a.out
+ ---------------------------------------------
+  HYDROMETEOROLOGICAL AFFORESTATION SCENARIO
+ ---------------------------------------------
+ Season   Rain(mm) Evap(mm) Runoff(mm) SoilM(mm)  HDCI
+ ---------------------------------------------
+WINTER      203.60     46.00    127.20    367.50   0.990
+SPRING      152.25     63.00     84.00    309.00   1.008
+SUMMER      102.00     72.00     42.16    235.00   1.025
+AUTUMN      131.17     54.00     73.01    326.40   0.995
+ ---------------------------------------------
+  > HDCI < 1  indicates wetter conditions
+  > HDCI > 1  indicates drier conditions
+ ---------------------------------------------
+Fortran STOP
+IEEE arithmetic exceptions signaled: INEXACT
+~ $ cat hydro3.f
+PROGRAM HYDROMETEOROLOGY
+!-----------------------------------------------------------------------
+!  HYDROMETEOROLOGICAL RESPONSE AND DROUGHT INDEX DEMONSTRATION
+!  (Inspired by Buechel et al. 2024, Houmma et al. 2025)
+!  Simulates seasonal afforestation impacts and computes
+!  a synthetic hydrometeorological drought composite index (HDCI).
+!-----------------------------------------------------------------------
+      IMPLICIT NONE
+      INTEGER NSEASON, I
+      PARAMETER (NSEASON=4)
+      CHARACTER*10 SEASON(NSEASON)
+      REAL RAIN(NSEASON), EVAP(NSEASON), RUNOFF(NSEASON)
+      REAL SOILM(NSEASON), BASE_RAIN(NSEASON), BASE_EVAP(NSEASON)
+      REAL BASE_RUNOFF(NSEASON), BASE_SOILM(NSEASON)
+      REAL DRAIN, DEVAP, DRUN, DSOIL, HDCI(NSEASON)
+      REAL SHAP_WEIGHTS(4), SCORE
+
+!-----------------------------------------------------------------------
+!  INITIALISE SEASONAL NAMES AND BASELINE HYDRO VARIABLES
+!-----------------------------------------------------------------------
+      DATA SEASON /'WINTER','SPRING','SUMMER','AUTUMN'/
+      DATA BASE_RAIN /200.0,150.0,100.0,130.0/
+      DATA BASE_EVAP /40.0,60.0,80.0,50.0/
+      DATA BASE_RUNOFF /120.0,80.0,40.0,70.0/
+      DATA BASE_SOILM /350.0,300.0,250.0,320.0/
+
+!-----------------------------------------------------------------------
+!  SHAP-LIKE EXPLAINABLE WEIGHTS FOR AI-BASED DROUGHT INDEX
+!  (Sum ≈ 1.0)
+!-----------------------------------------------------------------------
+      DATA SHAP_WEIGHTS /0.35,0.25,0.25,0.15/
+
+      WRITE(*,*) '---------------------------------------------'
+      WRITE(*,*) ' HYDROMETEOROLOGICAL AFFORESTATION SCENARIO '
+      WRITE(*,*) '---------------------------------------------'
+      WRITE(*,*) 'Season   Rain(mm) Evap(mm) Runoff(mm) SoilM(mm)  HDCI'
+      WRITE(*,*) '---------------------------------------------'
+
+!-----------------------------------------------------------------------
+!  LOOP OVER SEASONS AND COMPUTE CHANGES
+!  (Representative % changes drawn from Buechel et al. 2024)
+!-----------------------------------------------------------------------
+      DO 100 I=1,NSEASON
+         DRAIN = 0.0
+         DEVAP = 0.0
+         DRUN  = 0.0
+         DSOIL = 0.0
+
+         IF (SEASON(I).EQ.'WINTER') THEN
+            DRAIN = 1.8
+            DEVAP = 15.0
+            DRUN  = 6.0
+            DSOIL = 5.0
+         ELSE IF (SEASON(I).EQ.'SPRING') THEN
+            DRAIN = 1.5
+            DEVAP = 5.0
+            DRUN  = 5.0
+            DSOIL = 3.0
+         ELSE IF (SEASON(I).EQ.'SUMMER') THEN
+            DRAIN = 2.0
+            DEVAP = -10.0
+            DRUN  = 5.4
+            DSOIL = -6.0
+         ELSE
+            DRAIN = 0.9
+            DEVAP = 8.0
+            DRUN  = 4.3
+            DSOIL = 2.0
+         ENDIF
+
+         RAIN(I)   = BASE_RAIN(I)  * (1.0 + DRAIN/100.0)
+         EVAP(I)   = BASE_EVAP(I)  * (1.0 + DEVAP/100.0)
+         RUNOFF(I) = BASE_RUNOFF(I)* (1.0 + DRUN/100.0)
+         SOILM(I)  = BASE_SOILM(I) * (1.0 + DSOIL/100.0)
+
+!-----------------------------------------------------------------------
+!  COMPUTE SYNTHETIC HYDROMETEOROLOGICAL DROUGHT COMPOSITE INDEX (HDCI)
+!  Based on weighted standardized anomalies (simplified conceptually)
+!-----------------------------------------------------------------------
+         SCORE = SHAP_WEIGHTS(1)*(RAIN(I)-BASE_RAIN(I))/BASE_RAIN(I)
+     &          +SHAP_WEIGHTS(2)*(SOILM(I)-BASE_SOILM(I))/BASE_SOILM(I)
+     &          -SHAP_WEIGHTS(3)*(EVAP(I)-BASE_EVAP(I))/BASE_EVAP(I)
+     &          +SHAP_WEIGHTS(4)*(RUNOFF(I)-BASE_RUNOFF(I))/BASE_RUNOFF(I)
+         HDCI(I) = 1.0 + SCORE
+
+         WRITE(*,1000) SEASON(I), RAIN(I), EVAP(I),
+     &                 RUNOFF(I), SOILM(I), HDCI(I)
+ 100  CONTINUE
+
+      WRITE(*,*) '---------------------------------------------'
+      WRITE(*,*) ' > HDCI < 1  indicates wetter conditions'
+      WRITE(*,*) ' > HDCI > 1  indicates drier conditions'
+      WRITE(*,*) '---------------------------------------------'
+      STOP
+
+ 1000 FORMAT(A8,2X,F8.2,2X,F8.2,2X,F8.2,2X,F8.2,2X,F6.3)
+      END
+~ $
